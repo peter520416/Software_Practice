@@ -10,11 +10,10 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 세션 상태 초기화 (API Key & 일기 내용) ---
+# --- 세션 상태 초기화 ---
 if "api_key" not in st.session_state:
     st.session_state.api_key = None
 
-# [추가됨] 생성된 일기 내용을 저장할 변수 초기화
 if "diary_content" not in st.session_state:
     st.session_state.diary_content = ""
 
@@ -28,7 +27,7 @@ with st.sidebar:
             st.success("✅ 사용자 API Key가 적용되었습니다!")
             if st.button("키 초기화 (로그아웃)"):
                 st.session_state.api_key = None
-                st.session_state.diary_content = "" # 로그아웃 시 일기 내용도 초기화
+                st.session_state.diary_content = "" 
                 st.rerun()
     else:
         st.markdown("🔑 **OpenAI API Key 입력**")
@@ -104,20 +103,35 @@ if uploaded_files:
     
     st.divider()
 
-    st.subheader("3. 일기 생성")
+    # --- [수정된 섹션] 3. 설정 및 생성 (모델 선택 포함) ---
+    st.subheader("3. 설정 및 생성")
     
-    col_opt1, col_opt2 = st.columns([3, 1])
+    # 분위기와 모델 선택을 2개의 컬럼으로 나란히 배치
+    col_opt1, col_opt2 = st.columns(2)
+    
     with col_opt1:
-        mood = st.text_input("오늘의 분위기 (선택사항)", placeholder="예: 차분한, 활기찬, 감성적인")
-    
+        mood = st.text_input("오늘의 분위기 (선택사항)", placeholder="예: 차분한, 활기찬")
+        
     with col_opt2:
-        st.write("") 
-        st.write("")
-        generate_btn = st.button("일기 쓰기 ✨", type="primary", use_container_width=True)
+        # 모델 선택 셀렉트박스
+        model_option = st.selectbox(
+            "AI 모델 선택", 
+            ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "직접 입력"],
+            help="gpt-4o-mini: 빠름(추천) / gpt-4o: 고성능"
+        )
+        # 직접 입력을 선택했을 때만 나타나는 텍스트창
+        if model_option == "직접 입력":
+            custom_model = st.text_input("모델명 입력", placeholder="예: gpt-5", label_visibility="collapsed")
+            selected_model = custom_model if custom_model else "gpt-4o-mini"
+        else:
+            selected_model = model_option
 
-    # --- [수정된 부분] 버튼 클릭 시 API 호출 및 저장 ---
+    # 버튼을 하단에 꽉 차게 배치
+    st.write("")
+    generate_btn = st.button("일기 쓰기 ✨", type="primary", use_container_width=True)
+
     if generate_btn:
-        with st.spinner("AI가 사진을 보며 글을 쓰고 있습니다..."):
+        with st.spinner(f"[{selected_model}] 모델이 글을 쓰고 있습니다..."):
             diary_prompt = """오늘 찍은 사진들을 보고 일기를 작성해주세요.
             각 사진과 함께 장소, 함께한 사람들, 활동 키워드가 제공됩니다.
             이 정보들을 자연스럽게 활용하여 실제 있었던 일만을 서술해주세요.
@@ -153,8 +167,9 @@ if uploaded_files:
                 })
 
             try:
+                # [핵심] 선택된 모델 변수(selected_model) 사용
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=selected_model, 
                     messages=[
                         {"role": "system", "content": "당신은 세련된 에세이 작가입니다."},
                         {"role": "user", "content": message_content}
@@ -162,14 +177,13 @@ if uploaded_files:
                     temperature=0.3,
                     max_tokens=1000
                 )
-                # 결과를 세션 상태에 저장 (화면이 리로드되어도 사라지지 않게 함)
+                
                 st.session_state.diary_content = response.choices[0].message.content
                 
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
 
-    # --- [수정된 부분] 결과 표시 및 편집 영역 ---
-    # 저장된 일기 내용이 있을 때만 표시
+    # 결과 표시 및 편집 영역
     if st.session_state.diary_content:
         today = datetime.date.today()
         weekday_str = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
@@ -177,8 +191,8 @@ if uploaded_files:
 
         st.divider()
         st.subheader(f"📅 {formatted_date}")
+        st.caption(f"작성된 모델: {selected_model}") # 어떤 모델로 썼는지 표시
         
-        # 편집 가능한 텍스트 영역 (height로 높이 조절)
         st.info("아래 내용을 자유롭게 수정할 수 있습니다.")
         edited_diary = st.text_area(
             "일기 내용 편집",
@@ -186,9 +200,6 @@ if uploaded_files:
             height=400,
             label_visibility="collapsed"
         )
-        
-        # (선택 사항) 수정된 내용을 다운로드 하거나 복사할 수 있는 버튼 예시
-        # st.download_button("일기 저장하기", edited_diary, file_name=f"diary_{today}.txt")
 
 else:
     with st.container(border=True):
