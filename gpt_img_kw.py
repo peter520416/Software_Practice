@@ -10,6 +10,9 @@ st.set_page_config(
     layout="centered"
 )
 
+if "api_key" not in st.session_state:
+    st.session_state.api_key = None
+
 # --- 세션 상태 및 API 키 로드 ---
 with st.sidebar:
     # 이미 Secrets나 입력으로 키가 확보된 경우
@@ -182,4 +185,5 @@ if uploaded_files:
 else:
     # 파일이 없을 때 안내
     with st.container(border=True):
+
         st.write("📂 위의 **'Browse files'** 버튼을 눌러 사진을 추가해주세요.")
