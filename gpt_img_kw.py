@@ -12,8 +12,11 @@ st.set_page_config(
 
 # --- 세션 상태 초기화 (API Key & 일기 내용) ---
 if "api_key" not in st.session_state:
-    st.session_state.api_key = None
-
+    # 1. 먼저 Secrets(서버 저장소)에 키가 있는지 확인
+    if "OPENAI_API_KEY" in st.secrets:
+        st.session_state.api_key = st.secrets["OPENAI_API_KEY"]
+    else:
+        st.session_state.api_key = None
 # [추가됨] 생성된 일기 내용을 저장할 변수 초기화
 if "diary_content" not in st.session_state:
     st.session_state.diary_content = ""
@@ -193,3 +196,4 @@ if uploaded_files:
 else:
     with st.container(border=True):
         st.write("📂 위의 **'Browse files'** 버튼을 눌러 사진을 추가해주세요.")
+
