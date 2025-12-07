@@ -56,7 +56,7 @@ with st.sidebar:
 
     # 사용 가이드
     with st.expander("📖 사용 가이드", expanded=False):
-        st.markdown("""
+        st.caption("""
         **1단계**: 사진을 업로드하세요.
         
         **2단계**: 장소, 인물 등 정보를 입력하세요.
@@ -208,5 +208,6 @@ else:
     with st.container(border=True):
 
         st.write("📂 위의 **'Browse files'** 버튼을 눌러 사진을 추가해주세요.")
+
 
 
