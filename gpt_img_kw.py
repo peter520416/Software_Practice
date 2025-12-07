@@ -10,37 +10,56 @@ st.set_page_config(
     layout="centered"
 )
 
+# --- [핵심 수정 부분] 세션 상태 초기화 및 Secrets 확인 ---
 if "api_key" not in st.session_state:
-    st.session_state.api_key = None
-
-# --- 세션 상태 및 API 키 로드 ---
-with st.sidebar:
-    # 이미 Secrets나 입력으로 키가 확보된 경우
-    if st.session_state.api_key:
-        # 내 키(Secrets)로 구동 중일 때는 굳이 키를 보여줄 필요 없음
-        if "OPENAI_API_KEY" in st.secrets:
-            st.success("✅ 서버의 API Key가 적용되었습니다.")
-            st.info("개발자가 제공하는 키로 무료 이용 가능합니다.")
-        else:
-            st.success("✅ 사용자 API Key가 적용되었습니다!")
-            if st.button("키 초기화 (로그아웃)"):
-                st.session_state.api_key = None
-                st.rerun()
-    
-    # 키가 없는 경우 (입력창 표시)
+    # 1. 먼저 Secrets(배포 환경)에 키가 있는지 확인
+    if "OPENAI_API_KEY" in st.secrets:
+        st.session_state.api_key = st.secrets["OPENAI_API_KEY"]
     else:
-        st.markdown("🔑 **OpenAI API Key 입력**")
-        input_key = st.text_input("API Key", type="password")
-        if st.button("적용하기"):
-            st.session_state.api_key = input_key
-            st.rerun()
+        st.session_state.api_key = None
+
+# --- 사이드바 UI ---
+with st.sidebar:
+    st.title("🔧 설정 (Settings)")
+    
+    with st.container(border=True):
+        # Case 1: 키가 이미 로드된 경우 (Secrets 또는 로그인 성공)
+        if st.session_state.api_key:
+            st.success("✅ API Key가 적용되었습니다!")
+            
+            # Secrets로 구동 중인지 확인 (개발자 키 사용 중)
+            if "OPENAI_API_KEY" in st.secrets:
+                st.caption("개발자 제공 키로 실행 중입니다.")
+            else:
+                # 사용자가 직접 입력한 경우에만 초기화 버튼 표시
+                st.caption("사용자 입력 키로 실행 중입니다.")
+                if st.button("키 다시 입력하기 (초기화)"):
+                    st.session_state.api_key = None
+                    st.rerun()
+        
+        # Case 2: 키가 없는 경우 (입력창 표시)
+        else:
+            st.markdown("🔑 **OpenAI API Key 입력**")
+            input_key = st.text_input(
+                "API Key", 
+                type="password", 
+                placeholder="sk-...", 
+                label_visibility="collapsed"
+            )
+            
+            if st.button("적용하기", type="primary", use_container_width=True):
+                if input_key:
+                    st.session_state.api_key = input_key
+                    st.rerun()
+                else:
+                    st.warning("키를 입력해주세요.")
 
     # 사용 가이드
     with st.expander("📖 사용 가이드", expanded=False):
         st.markdown("""
-        **1단계**: API Key를 입력하고 적용하세요.
-        **2단계**: 메인 화면에서 사진을 업로드하세요.
-        **3단계**: '일기 쓰기' 버튼을 누르면 AI가 기록해줍니다.
+        **1단계**: 사진을 업로드하세요.
+        **2단계**: 장소, 인물 등 정보를 입력하세요.
+        **3단계**: '일기 쓰기' 버튼을 누르세요.
         """)
     
     st.divider()
@@ -53,9 +72,9 @@ if not st.session_state.api_key:
     st.title("AI Photo Diary 📸")
     st.write("---")
     st.info("👈 **왼쪽 사이드바**에서 OpenAI API Key를 입력하여 '로그인' 해주세요.")
-    st.stop() # 여기서 코드 실행 중단
+    st.stop()
 
-# 클라이언트 생성 (세션에 저장된 키 사용)
+# 2. 클라이언트 생성
 client = OpenAI(api_key=st.session_state.api_key)
 
 # 3. 메인 타이틀 (로그인 성공 시 보임)
@@ -187,3 +206,4 @@ else:
     with st.container(border=True):
 
         st.write("📂 위의 **'Browse files'** 버튼을 눌러 사진을 추가해주세요.")
+
