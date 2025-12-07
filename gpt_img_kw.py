@@ -10,58 +10,40 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- [핵심 수정 부분] 세션 상태 초기화 및 Secrets 확인 ---
+# --- 세션 상태 초기화 (API Key & 일기 내용) ---
 if "api_key" not in st.session_state:
-    # 1. 먼저 Secrets(배포 환경)에 키가 있는지 확인
-    if "OPENAI_API_KEY" in st.secrets:
-        st.session_state.api_key = st.secrets["OPENAI_API_KEY"]
-    else:
-        st.session_state.api_key = None
+    st.session_state.api_key = None
 
-# --- 사이드바 UI ---
+# [추가됨] 생성된 일기 내용을 저장할 변수 초기화
+if "diary_content" not in st.session_state:
+    st.session_state.diary_content = ""
+
+# --- 사이드바 로직 ---
 with st.sidebar:
-    st.title("🔧 설정 (Settings)")
-    
-    with st.container(border=True):
-        # Case 1: 키가 이미 로드된 경우 (Secrets 또는 로그인 성공)
-        if st.session_state.api_key:
-            st.success("✅ API Key가 적용되었습니다!")
-            
-            # Secrets로 구동 중인지 확인 (개발자 키 사용 중)
-            if "OPENAI_API_KEY" in st.secrets:
-                st.caption("개발자 제공 키로 실행 중입니다.")
-            else:
-                # 사용자가 직접 입력한 경우에만 초기화 버튼 표시
-                st.caption("사용자 입력 키로 실행 중입니다.")
-                if st.button("키 다시 입력하기 (초기화)"):
-                    st.session_state.api_key = None
-                    st.rerun()
-        
-        # Case 2: 키가 없는 경우 (입력창 표시)
+    if st.session_state.api_key:
+        if "OPENAI_API_KEY" in st.secrets:
+            st.success("✅ 서버의 API Key가 적용되었습니다.")
+            st.info("개발자가 제공하는 키로 무료 이용 가능합니다.")
         else:
-            st.markdown("🔑 **OpenAI API Key 입력**")
-            input_key = st.text_input(
-                "API Key", 
-                type="password", 
-                placeholder="sk-...", 
-                label_visibility="collapsed"
-            )
-            
-            if st.button("적용하기", type="primary", use_container_width=True):
-                if input_key:
-                    st.session_state.api_key = input_key
-                    st.rerun()
-                else:
-                    st.warning("키를 입력해주세요.")
+            st.success("✅ 사용자 API Key가 적용되었습니다!")
+            if st.button("키 초기화 (로그아웃)"):
+                st.session_state.api_key = None
+                st.session_state.diary_content = "" # 로그아웃 시 일기 내용도 초기화
+                st.rerun()
+    else:
+        st.markdown("🔑 **OpenAI API Key 입력**")
+        input_key = st.text_input("API Key", type="password")
+        if st.button("적용하기"):
+            st.session_state.api_key = input_key
+            st.rerun()
 
-    # 사용 가이드
     with st.expander("📖 사용 가이드", expanded=False):
-        st.caption("""
-        **1단계**: 사진을 업로드하세요.
+        st.markdown("""
+        **1단계**: API Key를 입력하고 적용하세요.
         
-        **2단계**: 장소, 인물 등 정보를 입력하세요.
+        **2단계**: 메인 화면에서 사진을 업로드하세요.
         
-        **3단계**: '일기 쓰기' 버튼을 누르세요.
+        **3단계**: '일기 쓰기' 버튼을 누르면 AI가 기록해줍니다.
         """)
     
     st.divider()
@@ -69,27 +51,22 @@ with st.sidebar:
 
 # --- 메인 로직 시작 ---
 
-# 키가 없으면 메인 화면 진입 차단
 if not st.session_state.api_key:
     st.title("AI Photo Diary 📸")
     st.write("---")
     st.info("👈 **왼쪽 사이드바**에서 OpenAI API Key를 입력하여 '로그인' 해주세요.")
     st.stop()
 
-# 2. 클라이언트 생성
 client = OpenAI(api_key=st.session_state.api_key)
 
-# 3. 메인 타이틀 (로그인 성공 시 보임)
 st.title("AI Photo Diary 📝")
 st.caption("사진을 업로드하고 메모를 남기면, AI가 당신의 하루를 감성적인 글로 기록해 드립니다.")
 st.divider()
 
-# 4. 이미지 인코딩 함수
 def encode_uploaded_file(file_obj):
     file_obj.seek(0)
     return base64.b64encode(file_obj.read()).decode("utf-8")
 
-# 5. 파일 업로드 섹션
 st.subheader("1. 사진 선택")
 uploaded_files = st.file_uploader(
     "기록하고 싶은 사진들을 선택하세요", 
@@ -102,7 +79,6 @@ images_info = []
 if uploaded_files:
     st.subheader("2. 상세 정보 입력")
     
-    # 각 사진별 입력 폼
     for uploaded_file in uploaded_files:
         with st.container(border=True):
             col1, col2 = st.columns([1, 2])
@@ -128,21 +104,20 @@ if uploaded_files:
     
     st.divider()
 
-    # 6. 스타일 및 생성 섹션
     st.subheader("3. 일기 생성")
     
     col_opt1, col_opt2 = st.columns([3, 1])
     with col_opt1:
-        mood = st.text_input("오늘의 분위기 (선택사항으로 작성하지 않을 시 평범한 톤으로 일기가 작성 됩니다.)", placeholder="예: 차분한, 활기찬, 감성적인")
+        mood = st.text_input("오늘의 분위기 (선택사항)", placeholder="예: 차분한, 활기찬, 감성적인")
     
     with col_opt2:
         st.write("") 
         st.write("")
-        generate_btn = st.button("일기 쓰기", type="primary", use_container_width=True)
+        generate_btn = st.button("일기 쓰기 ✨", type="primary", use_container_width=True)
 
+    # --- [수정된 부분] 버튼 클릭 시 API 호출 및 저장 ---
     if generate_btn:
         with st.spinner("AI가 사진을 보며 글을 쓰고 있습니다..."):
-            # 프롬프트 구성
             diary_prompt = """오늘 찍은 사진들을 보고 일기를 작성해주세요.
             각 사진과 함께 장소, 함께한 사람들, 활동 키워드가 제공됩니다.
             이 정보들을 자연스럽게 활용하여 실제 있었던 일만을 서술해주세요.
@@ -187,27 +162,34 @@ if uploaded_files:
                     temperature=0.3,
                     max_tokens=1000
                 )
+                # 결과를 세션 상태에 저장 (화면이 리로드되어도 사라지지 않게 함)
+                st.session_state.diary_content = response.choices[0].message.content
                 
-                # 날짜 포맷팅
-                today = datetime.date.today()
-                weekday_str = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-                formatted_date = f"{today.year}년 {today.month}월 {today.day}일 {weekday_str[today.weekday()]}"
-
-                # 7. 결과 출력
-                st.divider()
-                st.subheader(f"📅 {formatted_date}")
-                
-                with st.container(border=True):
-                    st.markdown(response.choices[0].message.content)
-                    
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
 
+    # --- [수정된 부분] 결과 표시 및 편집 영역 ---
+    # 저장된 일기 내용이 있을 때만 표시
+    if st.session_state.diary_content:
+        today = datetime.date.today()
+        weekday_str = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+        formatted_date = f"{today.year}년 {today.month}월 {today.day}일 {weekday_str[today.weekday()]}"
+
+        st.divider()
+        st.subheader(f"📅 {formatted_date}")
+        
+        # 편집 가능한 텍스트 영역 (height로 높이 조절)
+        st.info("아래 내용을 자유롭게 수정할 수 있습니다.")
+        edited_diary = st.text_area(
+            "일기 내용 편집",
+            value=st.session_state.diary_content,
+            height=400,
+            label_visibility="collapsed"
+        )
+        
+        # (선택 사항) 수정된 내용을 다운로드 하거나 복사할 수 있는 버튼 예시
+        # st.download_button("일기 저장하기", edited_diary, file_name=f"diary_{today}.txt")
+
 else:
-    # 파일이 없을 때 안내
     with st.container(border=True):
-
         st.write("📂 위의 **'Browse files'** 버튼을 눌러 사진을 추가해주세요.")
-
-
-
